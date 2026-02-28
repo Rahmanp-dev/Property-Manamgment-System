@@ -1,8 +1,10 @@
 
 import { MongoClient } from 'mongodb'
 
-// Hardcoded for stability as per previous fixed
-const uri = "mongodb://localhost:27017"
+if (!process.env.DATABASE_URL) {
+    throw new Error('Invalid/Missing environment variable: "DATABASE_URL"')
+}
+const uri = process.env.DATABASE_URL
 const options = {}
 
 let client
