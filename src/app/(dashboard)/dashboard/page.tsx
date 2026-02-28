@@ -17,9 +17,13 @@ export default async function DashboardPage() {
 
     if (!buildings || !stats) {
         return (
-            <div className="p-8 text-red-500">
-                <h2 className="text-xl font-bold">Error loading dashboard</h2>
-                <pre>{JSON.stringify({ bRes, sRes }, null, 2)}</pre>
+            <div className="p-8 text-red-500 overflow-auto">
+                <h2 className="text-xl font-bold mb-4">Error loading dashboard</h2>
+                <pre className="text-sm whitespace-pre-wrap">{JSON.stringify({
+                    bRes,
+                    sRes,
+                    debugUrl: process.env.DATABASE_URL
+                }, null, 2)}</pre>
             </div>
         )
     }
