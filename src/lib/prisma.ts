@@ -1,7 +1,16 @@
 import { PrismaClient } from '@prisma/client'
 
 const prismaClientSingleton = () => {
-    return new PrismaClient()
+    let url = process.env.DATABASE_URL
+    if (url && !url.includes("lpm_rental")) {
+        url = url.replace("mongodb.net/?", "mongodb.net/lpm_rental?")
+    }
+
+    return new PrismaClient({
+        datasources: {
+            db: { url }
+        }
+    })
 }
 
 declare global {

@@ -4,7 +4,10 @@ import { MongoClient } from 'mongodb'
 if (!process.env.DATABASE_URL) {
     throw new Error('Invalid/Missing environment variable: "DATABASE_URL"')
 }
-const uri = process.env.DATABASE_URL
+let uri = process.env.DATABASE_URL
+if (!uri.includes("lpm_rental")) {
+    uri = uri.replace("mongodb.net/?", "mongodb.net/lpm_rental?")
+}
 const options = {}
 
 let client
