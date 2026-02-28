@@ -6,14 +6,25 @@ import { AlertTriangle, TrendingUp, Wallet, Clock, Users } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PendingPaymentsTable } from "@/components/dashboard/pending-payments-table"
 
+export const dynamic = 'force-dynamic'
+
 export default async function DashboardPage() {
-    const [{ data: buildings }, { data: stats }] = await Promise.all([
+    const [bRes, sRes] = await Promise.all([
         getBuildings(),
         getDashboardStats()
     ])
 
+    const buildings = bRes.data
+    const stats = sRes.data
+
     if (!buildings || !stats) {
-        return <div>Error loading dashboard</div>
+        console.error("Dashboard Page Error:", { bRes, sRes })
+        return (
+            <div className="p-8 text-red-500">
+                <h2 className="text-xl font-bold">Error loading dashboard</h2>
+                <pre>{JSON.stringify({ bRes, sRes }, null, 2)}</pre>
+            </div>
+        )
     }
 
     const { revenue, alerts, counts } = stats
