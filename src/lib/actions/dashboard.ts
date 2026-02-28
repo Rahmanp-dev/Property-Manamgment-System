@@ -90,8 +90,8 @@ export async function getDashboardStats() {
             }
         }
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to fetch dashboard stats:", error)
-        return { error: "Failed to fetch dashboard stats" }
+        return { error: `Failed to fetch dashboard stats: ${error.message || String(error)}` }
     }
 }

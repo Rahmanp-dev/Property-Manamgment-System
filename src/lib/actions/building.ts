@@ -64,8 +64,8 @@ export async function getBuildings() {
             }
         })
         return { success: true, data: buildings }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to fetch buildings:", error)
-        return { error: "Failed to fetch buildings" }
+        return { error: `Failed to fetch buildings: ${error.message || String(error)}` }
     }
 }
