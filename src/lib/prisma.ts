@@ -1,13 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 
 const prismaClientSingleton = () => {
-    return new PrismaClient({
-        datasources: {
-            db: {
-                url: "mongodb://localhost:27017/lpm_rental"
-            },
-        },
-    })
+    return new PrismaClient()
 }
 
 declare global {
