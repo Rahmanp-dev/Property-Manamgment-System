@@ -1,0 +1,171 @@
+import { getFlatDetails } from "@/lib/actions/flat-details"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { ArrowLeft, User, CreditCard, History, Zap } from "lucide-react"
+import Link from "next/link"
+import { Separator } from "@/components/ui/separator"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { OnboardTenantDialog } from "@/components/dashboard/onboard-tenant-dialog"
+import { LogPaymentDialog } from "@/components/dashboard/log-payment-dialog"
+import { MeterReadingDialog } from "@/components/dashboard/meter-reading-dialog"
+import { PaymentHistoryList } from "@/components/dashboard/payment-history-list"
+import { OffboardTenantDialog } from "@/components/dashboard/offboard-tenant-dialog"
+
+export default async function FlatPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params
+    const { data: flat, error } = await getFlatDetails(id)
+
+    if (error || !flat) {
+        return <div>Flat not found</div>
+    }
+
+    const tenant = flat.Tenant[0]
+    const currentPayment = flat.payments[0] // Latest payment
+
+    return (
+        <div className="space-y-6">
+            <Link href={`/buildings/${flat.buildingId}`} className="flex items-center text-sm text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Building
+            </Link>
+
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">Flat {flat.flatNumber}</h1>
+                    <p className="text-muted-foreground">{flat.building.name}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <MeterReadingDialog flatId={id} flatNumber={flat.flatNumber} />
+                    <Badge variant={flat.status === "OCCUPIED" ? "default" : "secondary"} className="text-lg px-4 py-1">
+                        {flat.status}
+                    </Badge>
+                </div>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2">
+                {/* Tenant Info Card */}
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Current Tenant</CardTitle>
+                        <User className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        {tenant ? (
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="text-2xl font-bold">{tenant.fullName}</div>
+                                    <div className="text-sm text-muted-foreground">{tenant.phone}</div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <span className="text-muted-foreground block">Move In</span>
+                                        {new Date(tenant.leaseStartDate).toLocaleDateString()}
+                                    </div>
+                                    <div>
+                                        <span className="text-muted-foreground block">Lease End</span>
+                                        {tenant.leaseEndDate ? new Date(tenant.leaseEndDate).toLocaleDateString() : 'N/A'}
+                                    </div>
+                                </div>
+                                <div className="pt-2">
+                                    <OffboardTenantDialog flatId={flat.id} tenantName={tenant.fullName} />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center py-6 text-muted-foreground">
+                                <p className="mb-4">No active tenant.</p>
+                                <OnboardTenantDialog
+                                    flatId={flat.id}
+                                    suggestedRent={flat.rentAmount}
+                                    suggestedDeposit={flat.depositAmount}
+                                />
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Financial Overview */}
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Financials</CardTitle>
+                        <CreditCard className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <span className="text-sm text-muted-foreground">Rent</span>
+                                    <div className="text-xl font-bold">₹{flat.rentAmount}</div>
+                                </div>
+                                <div>
+                                    <span className="text-sm text-muted-foreground">Maintenance</span>
+                                    <div className="text-xl font-bold">₹{flat.maintenanceAmount}</div>
+                                </div>
+                            </div>
+
+                            {/* Breakdown if payment exists */}
+                            {currentPayment && (
+                                <div className="mt-4 p-3 bg-slate-50 rounded-md text-sm space-y-1">
+                                    <div className="font-medium text-muted-foreground mb-2">Current Bill Breakdown</div>
+                                    <div className="flex justify-between">
+                                        <span>Rent</span>
+                                        <span>₹{currentPayment.rentDue}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span>Maintenance</span>
+                                        <span>₹{currentPayment.maintenanceDue}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span>Electricity</span>
+                                        <span>₹{currentPayment.electricityDue || 0}</span>
+                                    </div>
+                                    <div className="flex justify-between text-red-600">
+                                        <span>Arrears</span>
+                                        <span>₹{(currentPayment as any).arrears || 0}</span>
+                                    </div>
+                                    <Separator className="my-1" />
+                                    <div className="flex justify-between font-bold">
+                                        <span>Total Due</span>
+                                        <span>₹{currentPayment.totalDue}</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            <Separator />
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <span className="text-sm text-muted-foreground block">Current Status</span>
+                                    <div className="mt-1">
+                                        {currentPayment ? (
+                                            currentPayment.status === "PAID" ? (
+                                                <Badge className="bg-green-600">Paid - No Dues</Badge>
+                                            ) : (
+                                                <Badge variant="destructive">Due: ₹{currentPayment.balance}</Badge>
+                                            )
+                                        ) : (
+                                            <span className="text-sm text-gray-500">No dues generated</span>
+                                        )}
+                                    </div>
+                                </div>
+                                {currentPayment && currentPayment.status !== "PAID" && (
+                                    <LogPaymentDialog payment={currentPayment as any} />
+                                )}
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Payment History */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <History className="h-5 w-5" /> Payment History
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <PaymentHistoryList payments={flat.payments} />
+                </CardContent>
+            </Card>
+
+        </div>
+    )
+}
