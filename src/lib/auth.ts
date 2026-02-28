@@ -17,6 +17,23 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
 
                 if (parsedCredentials.success) {
                     const { email, password } = parsedCredentials.data;
+
+                    // 1. Check Hardcoded Admin Env Vars First
+                    if (
+                        process.env.ADMIN_EMAIL &&
+                        process.env.ADMIN_PASSWORD &&
+                        email === process.env.ADMIN_EMAIL &&
+                        password === process.env.ADMIN_PASSWORD
+                    ) {
+                        return {
+                            id: "admin-env-var",
+                            name: "Platform Admin",
+                            email: email,
+                            role: "SUPER_ADMIN"
+                        } as any;
+                    }
+
+                    // 2. Fallback to Database for other users
                     const user = await prisma.user.findUnique({ where: { email } });
                     if (!user) return null;
 
