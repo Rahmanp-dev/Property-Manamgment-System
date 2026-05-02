@@ -22,16 +22,27 @@ model User {
   updatedAt DateTime @updatedAt
 }
 
+enum FlatType {
+  STUDIO
+  BHK1
+  BHK2
+  BHK3
+  OTHER
+}
+
 model Building {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  name          String
-  address       String
-  totalFloors   Int      @default(0)
-  totalFlats    Int      @default(0)
-  occupancyRate Float    @default(0.0) // Cached value
-  ratePerUnit   Float    @default(10.0) // Electricity rate per unit
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  address         String
+  totalFloors     Int      @default(0)
+  totalFlats      Int      @default(0)
+  occupancyRate   Float    @default(0.0)
+  ratePerUnit     Float    @default(10.0) // Electricity rate per unit
+  defaultRentBHK1 Float    @default(8000)
+  defaultRentBHK2 Float    @default(12000)
+  defaultRentBHK3 Float    @default(16000)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   floors Floor[]
   flats  Flat[]
@@ -63,6 +74,7 @@ model Flat {
   buildingId        String          @db.ObjectId
   floorId           String          @db.ObjectId
   flatNumber        String // e.g., "101", "A-1"
+  flatType          FlatType        @default(BHK1)
   rentAmount        Float
   maintenanceAmount Float           @default(0.0)
   depositAmount     Float           @default(0.0)
@@ -82,7 +94,7 @@ model Tenant {
   id               String    @id @default(auto()) @map("_id") @db.ObjectId
   fullName         String
   phone            String
-  aadhaarNumber    String? // Sensitive, encrypt in app logic if needed, or rely on DB security
+  aadhaarNumber    String?
   occupantsCount   Int       @default(1)
   leaseStartDate   DateTime
   leaseEndDate     DateTime?
@@ -120,7 +132,7 @@ model Payment {
   rentDue         Float
   maintenanceDue  Float
   electricityDue  Float         @default(0.0)
-  arrears         Float         @default(0.0) // Previous month's balance carried forward
+  arrears         Float         @default(0.0)
   totalDue        Float
   amountPaid      Float         @default(0.0)
   balance         Float         @default(0.0)

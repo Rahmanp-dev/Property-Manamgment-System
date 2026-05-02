@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -15,21 +15,42 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Plus } from "lucide-react"
 import { createFlat } from "@/lib/actions/flat"
+import { useRouter } from "next/navigation"
+
+const FLAT_TYPES = [
+    { value: "STUDIO", label: "Studio" },
+    { value: "BHK1", label: "1 BHK" },
+    { value: "BHK2", label: "2 BHK" },
+    { value: "BHK3", label: "3 BHK" },
+    { value: "OTHER", label: "Other" },
+]
 
 interface AddFlatDialogProps {
     buildingId: string
     floors: { id: string; number: number }[]
+    defaultRents?: { BHK1: number; BHK2: number; BHK3: number }
 }
 
-export function AddFlatDialog({ buildingId, floors }: AddFlatDialogProps) {
+export function AddFlatDialog({ buildingId, floors, defaultRents }: AddFlatDialogProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
+    const router = useRouter()
 
     const [floorId, setFloorId] = useState("")
     const [flatNumber, setFlatNumber] = useState("")
+    const [flatType, setFlatType] = useState("BHK1")
     const [rentAmount, setRentAmount] = useState("")
     const [maintenanceAmount, setMaintenanceAmount] = useState("")
+
+    // Auto-fill rent when flat type changes
+    useEffect(() => {
+        if (defaultRents) {
+            if (flatType === "BHK1") setRentAmount(defaultRents.BHK1.toString())
+            else if (flatType === "BHK2") setRentAmount(defaultRents.BHK2.toString())
+            else if (flatType === "BHK3") setRentAmount(defaultRents.BHK3.toString())
+        }
+    }, [flatType, defaultRents])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -46,6 +67,7 @@ export function AddFlatDialog({ buildingId, floors }: AddFlatDialogProps) {
             buildingId,
             floorId,
             flatNumber,
+            flatType: flatType as any,
             rentAmount: parseFloat(rentAmount),
             maintenanceAmount: parseFloat(maintenanceAmount)
         })
@@ -56,11 +78,12 @@ export function AddFlatDialog({ buildingId, floors }: AddFlatDialogProps) {
             setError(result.error)
         } else {
             setOpen(false)
-            // Reset form
             setFloorId("")
             setFlatNumber("")
             setRentAmount("")
             setMaintenanceAmount("")
+            setFlatType("BHK1")
+            router.refresh()
         }
     }
 
@@ -76,11 +99,11 @@ export function AddFlatDialog({ buildingId, floors }: AddFlatDialogProps) {
                     <DialogHeader>
                         <DialogTitle>Add New Flat</DialogTitle>
                         <DialogDescription>
-                            Add a new flat to this building. Select the floor and enter the details.
+                            Add a new flat. Select the floor, type, and details.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
-                        {/* Floor Selection - Simple Radio Buttons for reliability */}
+                        {/* Floor Selection */}
                         <div className="space-y-2">
                             <Label>Floor</Label>
                             {floors.length > 0 ? (
@@ -99,15 +122,31 @@ export function AddFlatDialog({ buildingId, floors }: AddFlatDialogProps) {
                                 </div>
                             ) : (
                                 <p className="text-sm text-muted-foreground">
-                                    No floors found. Please add floors when creating the building.
+                                    No floors found. Please add floors first.
                                 </p>
                             )}
                         </div>
 
+                        {/* Flat Type */}
+                        <div className="space-y-2">
+                            <Label>Flat Type</Label>
+                            <div className="flex flex-wrap gap-2">
+                                {FLAT_TYPES.map((type) => (
+                                    <Button
+                                        key={type.value}
+                                        type="button"
+                                        variant={flatType === type.value ? "default" : "outline"}
+                                        size="sm"
+                                        onClick={() => setFlatType(type.value)}
+                                    >
+                                        {type.label}
+                                    </Button>
+                                ))}
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="flatNumber" className="text-right">
-                                Flat #
-                            </Label>
+                            <Label htmlFor="flatNumber" className="text-right">Flat #</Label>
                             <Input
                                 id="flatNumber"
                                 value={flatNumber}
@@ -118,9 +157,7 @@ export function AddFlatDialog({ buildingId, floors }: AddFlatDialogProps) {
                             />
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="rent" className="text-right">
-                                Rent (₹)
-                            </Label>
+                            <Label htmlFor="rent" className="text-right">Rent (₹)</Label>
                             <Input
                                 id="rent"
                                 type="number"
@@ -132,9 +169,7 @@ export function AddFlatDialog({ buildingId, floors }: AddFlatDialogProps) {
                             />
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="maintenance" className="text-right">
-                                Maint. (₹)
-                            </Label>
+                            <Label htmlFor="maintenance" className="text-right">Maint. (₹)</Label>
                             <Input
                                 id="maintenance"
                                 type="number"

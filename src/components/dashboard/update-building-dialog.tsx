@@ -15,19 +15,26 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Settings } from "lucide-react"
 import { updateBuildingSettings } from "@/lib/actions/building-settings"
+import { useRouter } from "next/navigation"
+import { Separator } from "@/components/ui/separator"
 
 interface UpdateBuildingDialogProps {
     buildingId: string
     currentRate: number
     buildingName: string
     totalFloors: number
+    defaultRents?: { BHK1: number; BHK2: number; BHK3: number }
 }
 
-export function UpdateBuildingDialog({ buildingId, currentRate, buildingName, totalFloors }: UpdateBuildingDialogProps & { totalFloors: number }) {
+export function UpdateBuildingDialog({ buildingId, currentRate, buildingName, totalFloors, defaultRents }: UpdateBuildingDialogProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [rate, setRate] = useState(currentRate.toString())
     const [floors, setFloors] = useState(totalFloors.toString())
+    const [rent1, setRent1] = useState((defaultRents?.BHK1 ?? 8000).toString())
+    const [rent2, setRent2] = useState((defaultRents?.BHK2 ?? 12000).toString())
+    const [rent3, setRent3] = useState((defaultRents?.BHK3 ?? 16000).toString())
+    const router = useRouter()
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -36,15 +43,21 @@ export function UpdateBuildingDialog({ buildingId, currentRate, buildingName, to
         const res = await updateBuildingSettings({
             buildingId,
             ratePerUnit: parseFloat(rate),
-            totalFloors: parseInt(floors)
+            totalFloors: parseInt(floors),
+            defaultRentBHK1: parseFloat(rent1),
+            defaultRentBHK2: parseFloat(rent2),
+            defaultRentBHK3: parseFloat(rent3),
         })
 
         if (!res.success && res.error) {
-            alert(res.error) // Simple alert for now
+            alert(res.error)
         }
 
         setLoading(false)
-        if (res.success) setOpen(false)
+        if (res.success) {
+            setOpen(false)
+            router.refresh()
+        }
     }
 
     return (
@@ -90,6 +103,36 @@ export function UpdateBuildingDialog({ buildingId, currentRate, buildingName, to
                                 className="col-span-3"
                                 required
                             />
+                        </div>
+
+                        <Separator />
+                        <p className="text-sm font-medium text-muted-foreground">Default Rent Structure</p>
+
+                        <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3 rounded-lg border">
+                            <div>
+                                <Label className="text-xs">1 BHK (₹)</Label>
+                                <Input
+                                    type="number"
+                                    value={rent1}
+                                    onChange={(e) => setRent1(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <Label className="text-xs">2 BHK (₹)</Label>
+                                <Input
+                                    type="number"
+                                    value={rent2}
+                                    onChange={(e) => setRent2(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <Label className="text-xs">3 BHK (₹)</Label>
+                                <Input
+                                    type="number"
+                                    value={rent3}
+                                    onChange={(e) => setRent3(e.target.value)}
+                                />
+                            </div>
                         </div>
                     </div>
                     <DialogFooter>

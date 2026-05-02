@@ -16,8 +16,6 @@ export async function getBuildingDetails(id: string) {
                                     take: 1
                                 },
                                 payments: {
-                                    // Get payments for current month
-                                    // For prototype, just get latest 1
                                     take: 1,
                                     orderBy: { createdAt: 'desc' }
                                 }
@@ -30,8 +28,8 @@ export async function getBuildingDetails(id: string) {
             }
         })
         return { success: true, data: building }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to fetch building details:", error)
-        return { error: "Failed to fetch building details" }
+        return { error: `Failed to fetch building details: ${error.message || String(error)}` }
     }
 }

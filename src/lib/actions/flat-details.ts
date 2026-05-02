@@ -19,8 +19,8 @@ export async function getFlatDetails(id: string) {
             }
         })
         return { success: true, data: flat }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to fetch flat details:", error)
-        return { error: "Failed to fetch flat details" }
+        return { error: `Failed to fetch flat details: ${error.message || String(error)}` }
     }
 }

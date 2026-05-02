@@ -25,9 +25,9 @@ export async function logPayment(data: LogPaymentInput) {
     const { paymentId, amount, method, notes } = result.data
 
     try {
-        // Use Prisma for read (works on standalone)
         const payment = await prisma.payment.findUnique({
-            where: { id: paymentId }
+            where: { id: paymentId },
+            include: { flat: true }
         })
 
         if (!payment) return { error: "Payment record not found" }
@@ -42,7 +42,6 @@ export async function logPayment(data: LogPaymentInput) {
             newStatus = "PARTIAL"
         }
 
-        // Use Native MongoDB for write (avoids transaction requirement)
         const client = await clientPromise
         const db = client.db("lpm_rental")
 
@@ -55,7 +54,7 @@ export async function logPayment(data: LogPaymentInput) {
             {
                 $set: {
                     amountPaid: newAmountPaid,
-                    balance: newBalance,
+                    balance: Math.max(0, newBalance),
                     status: newStatus,
                     paymentMethod: method,
                     paymentDate: new Date(),
@@ -65,17 +64,20 @@ export async function logPayment(data: LogPaymentInput) {
             }
         )
 
+        // Cascade balance updates to future months
+        await updateFutureBalances(payment.tenantId, payment.month, Math.max(0, newBalance))
+
+        // Revalidate ALL relevant pages so finance & dashboard reflect instantly
+        revalidatePath('/dashboard')
+        revalidatePath('/finance')
+        revalidatePath(`/flats/${payment.flatId}`)
+        revalidatePath(`/buildings/${payment.flat.buildingId}`)
         revalidatePath('/')
 
-        // Trigger background update for future months (cascading arrears)
-        // We don't await this to keep UI responsive, or we await if consistency is critical.
-        // Given the user complaint, let's await it to ensure immediate consistency.
-        await updateFutureBalances(payment.tenantId, payment.month, newBalance)
-
         return { success: true }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to log payment:", error)
-        return { error: "Failed to log payment" }
+        return { error: `Failed to log payment: ${error.message || String(error)}` }
     }
 }
 
@@ -84,7 +86,6 @@ async function updateFutureBalances(tenantId: string, currentPaymentMonth: Date,
         const client = await clientPromise
         const db = client.db("lpm_rental")
 
-        // Find all future payments sorted by month
         const futurePayments = await db.collection("Payment").find({
             tenantId: new ObjectId(tenantId),
             month: { $gt: currentPaymentMonth }
@@ -112,17 +113,16 @@ async function updateFutureBalances(tenantId: string, currentPaymentMonth: Date,
                     $set: {
                         arrears: newArrears,
                         totalDue: newTotalDue,
-                        balance: newBalance,
+                        balance: Math.max(0, newBalance),
                         status: newStatus,
                         updatedAt: new Date()
                     }
                 }
             )
 
-            carriedBalance = newBalance
+            carriedBalance = Math.max(0, newBalance)
         }
     } catch (error) {
         console.error("Failed to cascade balance updates:", error)
     }
 }
-

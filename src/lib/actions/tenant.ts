@@ -3,7 +3,7 @@
 import clientPromise from "@/lib/mongo"
 import { onboardTenantSchema, OnboardTenantInput } from "@/lib/validations"
 import { revalidatePath } from "next/cache"
-import { redirect } from "next/navigation"
+import { ObjectId } from "mongodb"
 
 export async function onboardTenant(data: OnboardTenantInput) {
     const result = onboardTenantSchema.safeParse(data)
@@ -21,18 +21,12 @@ export async function onboardTenant(data: OnboardTenantInput) {
         // 0. Record Initial Meter Reading if provided
         if (initialMeterReading !== undefined && initialMeterReading !== null) {
             const readingDate = new Date(leaseStartDate)
-            // Determine month/year of lease start
             const rMonth = readingDate.getMonth()
             const rYear = readingDate.getFullYear()
 
-            // We record it as the reading for the month of move-in (or maybe previous month?)
-            // If move in is Jan 15, and we generate bill for Feb 1 (covering Jan), we need a Jan reading?
-            // Usually, "Previous Reading" is the reading at start of period.
-            // Let's store it with exact date, but indexed by month/year of the *start* date.
-
             await db.collection("MeterReading").updateOne(
                 {
-                    flatId: new (require('mongodb').ObjectId)(flatId),
+                    flatId: new ObjectId(flatId),
                     month: rMonth,
                     year: rYear
                 },
@@ -50,7 +44,10 @@ export async function onboardTenant(data: OnboardTenantInput) {
             )
         }
 
-        // 1. Native Insert Tenant
+        // 1. Get the flat to find its building
+        const flat = await db.collection("Flat").findOne({ _id: new ObjectId(flatId) })
+
+        // 2. Native Insert Tenant
         const now = new Date()
         const tenantDoc = {
             fullName,
@@ -59,7 +56,7 @@ export async function onboardTenant(data: OnboardTenantInput) {
             occupantsCount,
             leaseStartDate,
             leaseEndDate,
-            assignedFlatId: new (require('mongodb').ObjectId)(flatId), // Cast to ObjectId
+            assignedFlatId: new ObjectId(flatId),
             isActive: true,
             createdAt: now,
             updatedAt: now
@@ -67,9 +64,9 @@ export async function onboardTenant(data: OnboardTenantInput) {
 
         await db.collection("Tenant").insertOne(tenantDoc)
 
-        // 2. Native Update Flat
+        // 3. Native Update Flat
         await db.collection("Flat").updateOne(
-            { _id: new (require('mongodb').ObjectId)(flatId) },
+            { _id: new ObjectId(flatId) },
             {
                 $set: {
                     status: "OCCUPIED",
@@ -81,11 +78,15 @@ export async function onboardTenant(data: OnboardTenantInput) {
         )
 
         revalidatePath(`/flats/${flatId}`)
-        revalidatePath('/') // Updates dashboard stats
+        if (flat) revalidatePath(`/buildings/${flat.buildingId.toString()}`)
+        revalidatePath('/dashboard')
+        revalidatePath('/tenants')
+        revalidatePath('/finance')
+        revalidatePath('/')
         return { success: true }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to onboard tenant:", error)
-        return { error: "Failed to onboard tenant" }
+        return { error: `Failed to onboard tenant: ${error.message || String(error)}` }
     }
 }
 
@@ -93,9 +94,8 @@ export async function offboardTenant(flatId: string) {
     try {
         const client = await clientPromise
         const db = client.db("lpm_rental")
-        const fId = new (require('mongodb').ObjectId)(flatId)
+        const fId = new ObjectId(flatId)
 
-        // 1. Find the active tenant for this flat
         const tenant = await db.collection("Tenant").findOne({
             assignedFlatId: fId,
             isActive: true
@@ -105,9 +105,10 @@ export async function offboardTenant(flatId: string) {
             return { error: "No active tenant found for this flat" }
         }
 
+        const flat = await db.collection("Flat").findOne({ _id: fId })
         const now = new Date()
 
-        // 2. Update Tenant: Deactivate and set end date
+        // Deactivate tenant
         await db.collection("Tenant").updateOne(
             { _id: tenant._id },
             {
@@ -119,7 +120,7 @@ export async function offboardTenant(flatId: string) {
             }
         )
 
-        // 3. Update Flat: Mark as Vacant
+        // Mark flat as Vacant
         await db.collection("Flat").updateOne(
             { _id: fId },
             {
@@ -131,10 +132,13 @@ export async function offboardTenant(flatId: string) {
         )
 
         revalidatePath(`/flats/${flatId}`)
+        if (flat) revalidatePath(`/buildings/${flat.buildingId.toString()}`)
+        revalidatePath('/dashboard')
+        revalidatePath('/tenants')
         revalidatePath('/')
         return { success: true }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to offboard tenant:", error)
-        return { error: "Failed to offboard tenant" }
+        return { error: `Failed to offboard tenant: ${error.message || String(error)}` }
     }
 }

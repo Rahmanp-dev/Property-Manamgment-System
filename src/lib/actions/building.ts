@@ -12,13 +12,12 @@ export async function createBuilding(data: CreateBuildingInput) {
         return { error: "Invalid input" }
     }
 
-    const { name, address, totalFloors } = result.data
+    const { name, address, totalFloors, defaultRentBHK1, defaultRentBHK2, defaultRentBHK3, ratePerUnit } = result.data
 
     try {
         const client = await clientPromise
         const db = client.db("lpm_rental")
 
-        // 1. Native insert for Building
         const now = new Date()
         const buildingDoc = {
             name,
@@ -26,6 +25,10 @@ export async function createBuilding(data: CreateBuildingInput) {
             totalFloors,
             totalFlats: 0,
             occupancyRate: 0.0,
+            ratePerUnit: ratePerUnit ?? 10,
+            defaultRentBHK1: defaultRentBHK1 ?? 8000,
+            defaultRentBHK2: defaultRentBHK2 ?? 12000,
+            defaultRentBHK3: defaultRentBHK3 ?? 16000,
             createdAt: now,
             updatedAt: now
         }
@@ -33,9 +36,9 @@ export async function createBuilding(data: CreateBuildingInput) {
         const insertResult = await db.collection("Building").insertOne(buildingDoc)
         const buildingId = insertResult.insertedId.toString()
 
-        // 2. Native insertMany for Floors
+        // Auto-generate floors
         const floorsData = Array.from({ length: totalFloors }).map((_, i) => ({
-            buildingId: insertResult.insertedId, // exact objectId
+            buildingId: insertResult.insertedId,
             number: i,
             flatsCount: 0,
         }))
@@ -44,11 +47,13 @@ export async function createBuilding(data: CreateBuildingInput) {
             await db.collection("Floor").insertMany(floorsData)
         }
 
+        revalidatePath('/dashboard')
+        revalidatePath('/buildings')
         revalidatePath('/')
         return { success: true, data: { ...buildingDoc, id: buildingId } }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to create building:", error)
-        return { error: "Failed to create building" }
+        return { error: `Failed to create building: ${error.message || String(error)}` }
     }
 }
 
@@ -57,7 +62,17 @@ export async function getBuildings() {
         const buildings = await prisma.building.findMany({
             include: {
                 floors: true,
-                flats: true // Need stats
+                flats: {
+                    include: {
+                        payments: {
+                            where: {
+                                month: {
+                                    gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+                                }
+                            }
+                        }
+                    }
+                }
             },
             orderBy: {
                 createdAt: 'desc'

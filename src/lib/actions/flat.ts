@@ -9,6 +9,7 @@ const createFlatSchema = z.object({
     buildingId: z.string(),
     floorId: z.string(),
     flatNumber: z.string().min(1),
+    flatType: z.enum(["STUDIO", "BHK1", "BHK2", "BHK3", "OTHER"]).default("BHK1"),
     rentAmount: z.coerce.number().min(0),
     maintenanceAmount: z.coerce.number().min(0),
     depositAmount: z.coerce.number().min(0).optional()
@@ -23,7 +24,7 @@ export async function createFlat(data: CreateFlatInput) {
         return { error: "Invalid input" }
     }
 
-    const { buildingId, floorId, flatNumber, rentAmount, maintenanceAmount, depositAmount } = result.data
+    const { buildingId, floorId, flatNumber, flatType, rentAmount, maintenanceAmount, depositAmount } = result.data
 
     try {
         const client = await clientPromise
@@ -34,9 +35,11 @@ export async function createFlat(data: CreateFlatInput) {
             buildingId: new ObjectId(buildingId),
             floorId: new ObjectId(floorId),
             flatNumber,
+            flatType,
             rentAmount,
             maintenanceAmount,
             depositAmount: depositAmount || rentAmount * 2,
+            electricityType: "METERED",
             status: "VACANT",
             createdAt: now,
             updatedAt: now
@@ -57,9 +60,11 @@ export async function createFlat(data: CreateFlatInput) {
         )
 
         revalidatePath(`/buildings/${buildingId}`)
+        revalidatePath('/dashboard')
+        revalidatePath('/')
         return { success: true }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to create flat:", error)
-        return { error: "Failed to create flat" }
+        return { error: `Failed to create flat: ${error.message || String(error)}` }
     }
 }

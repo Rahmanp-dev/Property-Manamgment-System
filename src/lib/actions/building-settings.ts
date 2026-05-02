@@ -8,7 +8,10 @@ import { ObjectId } from "mongodb"
 const updateBuildingSchema = z.object({
     buildingId: z.string(),
     ratePerUnit: z.coerce.number().min(0),
-    totalFloors: z.coerce.number().min(1).optional()
+    totalFloors: z.coerce.number().min(1).optional(),
+    defaultRentBHK1: z.coerce.number().min(0).optional(),
+    defaultRentBHK2: z.coerce.number().min(0).optional(),
+    defaultRentBHK3: z.coerce.number().min(0).optional(),
 })
 
 export type UpdateBuildingInput = z.infer<typeof updateBuildingSchema>
@@ -20,7 +23,7 @@ export async function updateBuildingSettings(data: UpdateBuildingInput) {
         return { error: "Invalid input" }
     }
 
-    const { buildingId, ratePerUnit, totalFloors } = result.data
+    const { buildingId, ratePerUnit, totalFloors, defaultRentBHK1, defaultRentBHK2, defaultRentBHK3 } = result.data
 
     try {
         const client = await clientPromise
@@ -35,7 +38,6 @@ export async function updateBuildingSettings(data: UpdateBuildingInput) {
         // Handle Floor Updates if provided
         if (totalFloors !== undefined && totalFloors !== currentFloors) {
             if (totalFloors > currentFloors) {
-                // Add Floors
                 const newFloorsData = Array.from({ length: totalFloors - currentFloors }).map((_, i) => ({
                     buildingId: bId,
                     number: currentFloors + i,
@@ -46,22 +48,18 @@ export async function updateBuildingSettings(data: UpdateBuildingInput) {
                     await db.collection("Floor").insertMany(newFloorsData)
                 }
             } else {
-                // Reduce Floors - Safety Check
-                // Find floors that would be deleted
                 const floorsToDelete = await db.collection("Floor").find({
                     buildingId: bId,
                     number: { $gte: totalFloors }
                 }).toArray()
 
-                // Check for flats
                 for (const floor of floorsToDelete) {
                     const flatCount = await db.collection("Flat").countDocuments({ floorId: floor._id })
                     if (flatCount > 0) {
-                        return { error: `Cannot delete Floor ${floor.number} because it has flats. Is deleting last.` }
+                        return { error: `Cannot delete Floor ${floor.number} because it has flats.` }
                     }
                 }
 
-                // Safe to delete
                 await db.collection("Floor").deleteMany({
                     buildingId: bId,
                     number: { $gte: totalFloors }
@@ -69,21 +67,27 @@ export async function updateBuildingSettings(data: UpdateBuildingInput) {
             }
         }
 
+        const updateFields: Record<string, any> = {
+            ratePerUnit,
+            totalFloors: totalFloors ?? currentFloors,
+            updatedAt: new Date()
+        }
+
+        if (defaultRentBHK1 !== undefined) updateFields.defaultRentBHK1 = defaultRentBHK1
+        if (defaultRentBHK2 !== undefined) updateFields.defaultRentBHK2 = defaultRentBHK2
+        if (defaultRentBHK3 !== undefined) updateFields.defaultRentBHK3 = defaultRentBHK3
+
         await db.collection("Building").updateOne(
             { _id: bId },
-            {
-                $set: {
-                    ratePerUnit: ratePerUnit,
-                    totalFloors: totalFloors ?? currentFloors,
-                    updatedAt: new Date()
-                }
-            }
+            { $set: updateFields }
         )
 
         revalidatePath(`/buildings/${buildingId}`)
+        revalidatePath('/dashboard')
+        revalidatePath('/')
         return { success: true }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to update building:", error)
-        return { error: `Failed to update building: ${error instanceof Error ? error.message : "Unknown error"}` }
+        return { error: `Failed to update building: ${error.message || String(error)}` }
     }
 }

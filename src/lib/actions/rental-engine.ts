@@ -11,16 +11,14 @@ export async function generateMonthlyDues() {
         const db = client.db("lpm_rental")
 
         const today = new Date()
-        const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1) // First day of current month
+        const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1)
 
-        // 0-indexed month/year for meter readings
         const readingMonth = today.getMonth()
         const readingYear = today.getFullYear()
-        // Determine previous reading period
         const prevMonthIndex = readingMonth === 0 ? 11 : readingMonth - 1
         const prevYearIndex = readingMonth === 0 ? readingYear - 1 : readingYear
 
-        // 1. Get all active tenants with Flat AND Building details (for rate)
+        // Get all active tenants with Flat AND Building details
         const activeTenants = await prisma.tenant.findMany({
             where: {
                 isActive: true,
@@ -41,7 +39,6 @@ export async function generateMonthlyDues() {
 
         let generatedCount = 0
 
-        // 2. For each tenant, check/generate payment
         for (const tenant of activeTenants) {
             if (!tenant.flat || !tenant.assignedFlatId) continue
 
@@ -51,24 +48,20 @@ export async function generateMonthlyDues() {
                 month: currentMonth
             })
 
-            if (existingPayment) {
-                continue
-            }
+            if (existingPayment) continue
 
-            // 3. Get Arrears (Balance from LAST month's payment)
-            // We need the absolute last payment record before this month
+            // Get Arrears from last month
             const lastPaymentCursor = db.collection("Payment").find({
                 tenantId: new ObjectId(tenant.id),
                 month: { $lt: currentMonth }
             }).sort({ month: -1 }).limit(1)
 
             const lastPayment = await lastPaymentCursor.next()
-            const arrears = lastPayment ? (lastPayment as any).balance : 0
+            const arrears = lastPayment ? Math.max(0, (lastPayment as any).balance || 0) : 0
 
-            // 4. Calculate Electricity Bill
+            // Calculate Electricity Bill
             let electricityDue = 0.0
 
-            // Fetch current month's reading
             const currentReading = await db.collection("MeterReading").findOne({
                 flatId: new ObjectId(tenant.assignedFlatId),
                 month: readingMonth,
@@ -76,7 +69,6 @@ export async function generateMonthlyDues() {
             })
 
             if (currentReading) {
-                // Fetch previous month's reading
                 const prevReading = await db.collection("MeterReading").findOne({
                     flatId: new ObjectId(tenant.assignedFlatId),
                     month: prevMonthIndex,
@@ -86,18 +78,18 @@ export async function generateMonthlyDues() {
                 if (prevReading) {
                     const unitsConsumed = (currentReading as any).reading - (prevReading as any).reading
                     if (unitsConsumed > 0) {
-                        const rate = tenant.flat.building.ratePerUnit || 10 // Default to 10 if not set
+                        const rate = tenant.flat.building.ratePerUnit || 10
                         electricityDue = unitsConsumed * rate
                     }
                 }
             }
 
-            // 5. Calculate Total Dues
+            // Calculate Total Dues
             const rentDue = tenant.flat.rentAmount
             const maintenanceDue = tenant.flat.maintenanceAmount
             const totalDue = rentDue + maintenanceDue + electricityDue + arrears
 
-            // 6. Create Payment Record
+            // Create Payment Record
             const now = new Date()
             await db.collection("Payment").insertOne({
                 tenantId: new ObjectId(tenant.id),
@@ -118,11 +110,15 @@ export async function generateMonthlyDues() {
             generatedCount++
         }
 
+        // Revalidate all relevant pages
+        revalidatePath('/dashboard')
+        revalidatePath('/finance')
+        revalidatePath('/tenants')
         revalidatePath('/')
         return { success: true, count: generatedCount }
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to generate monthly dues:", error)
-        return { error: "Failed to generate monthly dues" }
+        return { error: `Failed to generate monthly dues: ${error.message || String(error)}` }
     }
 }

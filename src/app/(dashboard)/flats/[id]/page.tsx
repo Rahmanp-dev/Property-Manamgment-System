@@ -1,6 +1,5 @@
 import { getFlatDetails } from "@/lib/actions/flat-details"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { ArrowLeft, User, CreditCard, History, Zap } from "lucide-react"
 import Link from "next/link"
 import { Separator } from "@/components/ui/separator"
@@ -11,16 +10,26 @@ import { MeterReadingDialog } from "@/components/dashboard/meter-reading-dialog"
 import { PaymentHistoryList } from "@/components/dashboard/payment-history-list"
 import { OffboardTenantDialog } from "@/components/dashboard/offboard-tenant-dialog"
 
+export const dynamic = 'force-dynamic'
+
+const FLAT_TYPE_LABELS: Record<string, string> = {
+    BHK1: "1 BHK",
+    BHK2: "2 BHK",
+    BHK3: "3 BHK",
+    STUDIO: "Studio",
+    OTHER: "Other",
+}
+
 export default async function FlatPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const { data: flat, error } = await getFlatDetails(id)
 
     if (error || !flat) {
-        return <div>Flat not found</div>
+        return <div className="p-8 text-center text-muted-foreground">Flat not found</div>
     }
 
     const tenant = flat.Tenant[0]
-    const currentPayment = flat.payments[0] // Latest payment
+    const currentPayment = flat.payments[0]
 
     return (
         <div className="space-y-6">
@@ -31,7 +40,12 @@ export default async function FlatPage({ params }: { params: Promise<{ id: strin
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Flat {flat.flatNumber}</h1>
-                    <p className="text-muted-foreground">{flat.building.name}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                        <p className="text-muted-foreground">{flat.building.name}</p>
+                        <Badge variant="outline" className="text-xs">
+                            {FLAT_TYPE_LABELS[(flat as any).flatType] || (flat as any).flatType || ""}
+                        </Badge>
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <MeterReadingDialog flatId={id} flatNumber={flat.flatNumber} />
@@ -93,39 +107,44 @@ export default async function FlatPage({ params }: { params: Promise<{ id: strin
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <span className="text-sm text-muted-foreground">Rent</span>
-                                    <div className="text-xl font-bold">₹{flat.rentAmount}</div>
+                                    <div className="text-xl font-bold">₹{flat.rentAmount.toLocaleString()}</div>
                                 </div>
                                 <div>
                                     <span className="text-sm text-muted-foreground">Maintenance</span>
-                                    <div className="text-xl font-bold">₹{flat.maintenanceAmount}</div>
+                                    <div className="text-xl font-bold">₹{flat.maintenanceAmount.toLocaleString()}</div>
                                 </div>
                             </div>
 
-                            {/* Breakdown if payment exists */}
                             {currentPayment && (
                                 <div className="mt-4 p-3 bg-slate-50 rounded-md text-sm space-y-1">
                                     <div className="font-medium text-muted-foreground mb-2">Current Bill Breakdown</div>
                                     <div className="flex justify-between">
                                         <span>Rent</span>
-                                        <span>₹{currentPayment.rentDue}</span>
+                                        <span>₹{currentPayment.rentDue.toLocaleString()}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span>Maintenance</span>
-                                        <span>₹{currentPayment.maintenanceDue}</span>
+                                        <span>₹{currentPayment.maintenanceDue.toLocaleString()}</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span>Electricity</span>
-                                        <span>₹{currentPayment.electricityDue || 0}</span>
+                                        <span className="flex items-center gap-1"><Zap className="h-3 w-3" /> Electricity</span>
+                                        <span>₹{(currentPayment.electricityDue || 0).toLocaleString()}</span>
                                     </div>
                                     <div className="flex justify-between text-red-600">
                                         <span>Arrears</span>
-                                        <span>₹{(currentPayment as any).arrears || 0}</span>
+                                        <span>₹{((currentPayment as any).arrears || 0).toLocaleString()}</span>
                                     </div>
                                     <Separator className="my-1" />
                                     <div className="flex justify-between font-bold">
                                         <span>Total Due</span>
-                                        <span>₹{currentPayment.totalDue}</span>
+                                        <span>₹{currentPayment.totalDue.toLocaleString()}</span>
                                     </div>
+                                    {currentPayment.amountPaid > 0 && (
+                                        <div className="flex justify-between text-green-600 font-medium">
+                                            <span>Paid</span>
+                                            <span>₹{currentPayment.amountPaid.toLocaleString()}</span>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -138,7 +157,7 @@ export default async function FlatPage({ params }: { params: Promise<{ id: strin
                                             currentPayment.status === "PAID" ? (
                                                 <Badge className="bg-green-600">Paid - No Dues</Badge>
                                             ) : (
-                                                <Badge variant="destructive">Due: ₹{currentPayment.balance}</Badge>
+                                                <Badge variant="destructive">Due: ₹{currentPayment.balance.toLocaleString()}</Badge>
                                             )
                                         ) : (
                                             <span className="text-sm text-gray-500">No dues generated</span>
@@ -165,7 +184,6 @@ export default async function FlatPage({ params }: { params: Promise<{ id: strin
                     <PaymentHistoryList payments={flat.payments} />
                 </CardContent>
             </Card>
-
         </div>
     )
 }

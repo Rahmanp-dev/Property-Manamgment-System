@@ -10,8 +10,8 @@ export async function getDashboardStats() {
         thirtyDaysFromNow.setDate(today.getDate() + 30)
 
         // Parallel data fetching
-        const [buildings, overduePayments, expiringLeases, totalTenants] = await Promise.all([
-            // 1. Building Stats (Revenue)
+        const [buildings, overduePayments, expiringLeases, totalTenants, currentMonthPayments] = await Promise.all([
+            // 1. Building Stats
             prisma.building.findMany({
                 include: {
                     flats: {
@@ -25,18 +25,18 @@ export async function getDashboardStats() {
                     }
                 }
             }),
-            // 2. Overdue Payments (Pending from previous months or current month unpaid)
-            // Determining "Overdue" purely by Payment status logic is complex without a cron job
-            // For now, let's look for Payments marked OVERDUE or PENDING with due date passed
+            // 2. Overdue/Pending Payments
             prisma.payment.findMany({
                 where: {
-                    status: { in: ['OVERDUE', 'PENDING'] }
+                    status: { in: ['OVERDUE', 'PENDING', 'PARTIAL'] },
+                    balance: { gt: 0 }
                 },
                 include: {
                     tenant: true,
                     flat: { include: { building: true } }
                 },
-                take: 5
+                orderBy: { month: 'desc' },
+                take: 10
             }),
             // 3. Expiring Leases
             prisma.tenant.findMany({
@@ -53,23 +53,22 @@ export async function getDashboardStats() {
                 take: 5
             }),
             // 4. Total Tenants
-            prisma.tenant.count({ where: { isActive: true } })
-        ])
-
-        // Calculate aggregated revenue
-        let expectedRevenue = 0
-        let collectedRevenue = 0
-
-        buildings.forEach(b => {
-            b.flats.forEach(f => {
-                expectedRevenue += f.rentAmount + f.maintenanceAmount
-                // Check if paid this month
-                const payment = f.payments[0] // Since we filtered by month gte startOfMonth
-                if (payment) {
-                    collectedRevenue += payment.amountPaid
+            prisma.tenant.count({ where: { isActive: true } }),
+            // 5. Current month payment aggregation
+            prisma.payment.aggregate({
+                where: { month: { gte: startOfMonth } },
+                _sum: {
+                    totalDue: true,
+                    amountPaid: true,
+                    balance: true,
                 }
             })
-        })
+        ])
+
+        // Use actual payment data for revenue, not flat amounts
+        const expectedRevenue = currentMonthPayments._sum.totalDue || 0
+        const collectedRevenue = currentMonthPayments._sum.amountPaid || 0
+        const outstandingRevenue = currentMonthPayments._sum.balance || 0
 
         return {
             success: true,
@@ -77,7 +76,7 @@ export async function getDashboardStats() {
                 revenue: {
                     expected: expectedRevenue,
                     collected: collectedRevenue,
-                    outstanding: expectedRevenue - collectedRevenue
+                    outstanding: outstandingRevenue
                 },
                 alerts: {
                     overdue: overduePayments,
